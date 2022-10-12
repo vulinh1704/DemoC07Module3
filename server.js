@@ -5,15 +5,16 @@ const qs = require('qs');
 
 const server = http.createServer((req, res) => {
     let urlParse = url.parse(req.url, true);
-    let pathName = urlParse.pathname // vứt về : /home
-    let trimPath = pathName.replace(/^\/+|\/+$/g, '');
+    let pathName = urlParse.pathname // /edit/0;
+    let arrPath = pathName.split('/');
+    let trimPath = arrPath[1];
     let chosenHandler;
     if (typeof router[trimPath] === "undefined") {
         chosenHandler = handlers.notFound;
     } else {
         chosenHandler = router[trimPath];
     }
-    chosenHandler(req, res);
+    chosenHandler(req, res, arrPath[2]);
 });
 
 
@@ -27,7 +28,7 @@ handlers.home = function (req, res) {
     fs.readFile('./data/users.json', 'utf-8', (err, users) => {
         users = JSON.parse(users);
         users.forEach((item, index) => {
-            usersHtml += `${index + 1} : ${item.name} , ${item.password}<br>`
+            usersHtml += `${index + 1} : ${item.name} , ${item.password} | <a href="edit/${index}">Sửa</a> | <a href="delete/${index}">Xóa</a><br>`
         });
         fs.readFile('./views/index.html', 'utf-8', (err, indexHtml) => {
             res.writeHead(200, "text/html");
@@ -71,7 +72,41 @@ handlers.register = function (req, res) {
 
             })
         })
-        res.writeHead(301, {'location' : '/home'});
+        res.writeHead(301, {'location': '/home'});
+        res.end();
+    }
+}
+
+handlers.edit = function (req, res, index) {
+    if (req.method === "GET") {
+        fs.readFile('./views/edit.html', 'utf-8', (err, data) => {
+            res.writeHead(200, "text/html");
+            res.write(data);
+            res.end();
+        });
+    } else {
+        let data = '';
+        req.on('data', chunk => {
+            data += chunk;
+        });
+        req.on('end', () => {
+            let users = [];
+            const userInfo = qs.parse(data);
+            fs.readFile('./data/users.json', 'utf-8', (err, usersJson) => {
+                users = JSON.parse(usersJson);
+                for (let i = 0; i < users.length; i++) {
+                    if(i === +index){
+                        users[i] = userInfo;
+                    }
+                }
+                users = JSON.stringify(users);
+                fs.writeFile('./data/users.json', users, err => {
+                    console.log(err);
+                });
+
+            })
+        })
+        res.writeHead(301, {'location': '/home'});
         res.end();
     }
 }
@@ -79,8 +114,10 @@ handlers.register = function (req, res) {
 let router = {
     "home": handlers.home,
     "login": handlers.login,
-    "register": handlers.register
+    "register": handlers.register,
+    "edit": handlers.edit
 }
+
 server.listen(8080, function () {
     console.log('Server running!')
 })
