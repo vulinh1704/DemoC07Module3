@@ -1,60 +1,86 @@
 const http = require('http');
 const fs = require('fs');
 const url = require('url');
+const qs = require('qs');
 
 const server = http.createServer((req, res) => {
-    let parseUrl = url.parse(req.url, true);
-    let pathName = parseUrl.pathname;
+    let urlParse = url.parse(req.url, true);
+    let pathName = urlParse.pathname // vứt về : /home
     let trimPath = pathName.replace(/^\/+|\/+$/g, '');
-
     let chosenHandler;
     if (typeof router[trimPath] === "undefined") {
-        chosenHandler = handler.notFound;
+        chosenHandler = handlers.notFound;
     } else {
         chosenHandler = router[trimPath];
     }
     chosenHandler(req, res);
 });
 
-server.listen(8080, () => {
-    console.log("Server running")
-})
 
-let handler = {};
+let handlers = {};
+handlers.login = function (req, res) {
 
-
-handler.home = (req, res) => {
-    getTemplate(req, res , './views/index.html');
 }
 
-handler.notFound = (req, res) => {
-    getTemplate(req, res, './views/notFound.html')
-}
-
-handler.css = (req, res) => {
-    fs.readFile('./views/index.css', 'utf-8', (err, data) => {
-        if (err) {
-            console.log(err.message);
-        }
-        res.writeHead(200, "text/css");
-        res.write(data);
-        res.end();
+handlers.home = function (req, res) {
+    let usersHtml = '';
+    fs.readFile('./data/users.json', 'utf-8', (err, users) => {
+        users = JSON.parse(users);
+        users.forEach((item, index) => {
+            usersHtml += `${index + 1} : ${item.name} , ${item.password}<br>`
+        });
+        fs.readFile('./views/index.html', 'utf-8', (err, indexHtml) => {
+            res.writeHead(200, "text/html");
+            indexHtml = indexHtml.replace('{users}', usersHtml);
+            res.write(indexHtml);
+            res.end();
+        })
     })
 }
 
-let getTemplate = (req, res, path) => {
-    fs.readFile(path, 'utf-8', (err, data) => {
-        if (err) {
-            console.log(err.message);
-        }
+handlers.notFound = function (req, res) {
+    fs.readFile('./views/notFound.html', 'utf-8', (err, data) => {
         res.writeHead(200, "text/html");
         res.write(data);
         res.end();
-    })
+    });
+}
+
+handlers.register = function (req, res) {
+    if (req.method === "GET") {
+        fs.readFile('./views/register.html', 'utf-8', (err, data) => {
+            res.writeHead(200, "text/html");
+            res.write(data);
+            res.end();
+        });
+    } else {
+        let data = '';
+        req.on('data', chunk => {
+            data += chunk;
+        });
+        req.on('end', () => {
+            let users = [];
+            const userInfo = qs.parse(data); // Object
+            fs.readFile('./data/users.json', 'utf-8', (err, usersJson) => {
+                users = JSON.parse(usersJson);
+                users.push(userInfo);
+                users = JSON.stringify(users);
+                fs.writeFile('./data/users.json', users, err => {
+                    console.log(err);
+                });
+
+            })
+        })
+        res.writeHead(301, {'location' : '/home'});
+        res.end();
+    }
 }
 
 let router = {
-    'login': handler.login,
-    'home': handler.home,
-    'index.css': handler.css
+    "home": handlers.home,
+    "login": handlers.login,
+    "register": handlers.register
 }
+server.listen(8080, function () {
+    console.log('Server running!')
+})
